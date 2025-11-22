@@ -200,7 +200,7 @@ function App() {
             key={prompt.id}
             className="prompt-item"
             onClick={() => handleFillPrompt(prompt)}
-            title="Click to fill in active tab"
+            title={prompt.content}
           >
             <span className="prompt-title">{prompt.title}</span>
             <button
