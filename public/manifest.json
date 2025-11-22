@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "Quick Prompt Filler",
+  "version": "1.0.0",
+  "description": "Quickly fill prompts into ChatGPT, Gemini, and Claude.",
+  "permissions": ["storage", "activeTab"],
+  "action": {
+    "default_popup": "index.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://gemini.google.com/*",
+        "https://claude.ai/*"
+      ],
+      "js": ["assets/content.js"]
+    }
+  ]
+}
