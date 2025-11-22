@@ -21,6 +21,35 @@ h1 {
   text-align: center;
 }
 
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.header-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.icon-btn {
+  padding: 0.4rem 0.6rem;
+  background-color: #444;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85em;
+  transition: background-color 0.2s;
+  white-space: nowrap;
+}
+
+.icon-btn:hover {
+  background-color: #555;
+}
+
+
 .prompt-list {
   display: flex;
   flex-direction: column;
