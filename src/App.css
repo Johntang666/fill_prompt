@@ -67,10 +67,28 @@ h1 {
   align-items: center;
   cursor: pointer;
   transition: background-color 0.2s;
+  gap: 0.5rem;
 }
 
 .prompt-item:hover {
   background-color: #444;
+}
+
+.prompt-item.is-dragging {
+  opacity: 0.6;
+}
+
+.drag-handle {
+  cursor: grab;
+  color: #888;
+  user-select: none;
+  padding: 0 0.25rem;
+  font-size: 0.95em;
+  line-height: 1;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
 }
 
 .prompt-title {
@@ -78,20 +96,53 @@ h1 {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 280px;
+  max-width: 210px;
+  flex: 1;
 }
 
+.prompt-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.edit-btn,
 .delete-btn {
   background: none;
   border: none;
   color: #888;
-  font-size: 1.2em;
+  font-size: 1.05em;
   cursor: pointer;
   padding: 0 4px;
 }
 
+.edit-btn:hover {
+  color: #b6b6ff;
+}
+
 .delete-btn:hover {
   color: #ff4444;
+}
+
+.prompt-tooltip {
+  position: fixed;
+  z-index: 9999;
+  max-width: 320px;
+  max-height: 240px;
+  overflow: auto;
+  padding: 0.5rem 0.6rem;
+  border-radius: 6px;
+  background: rgba(20, 20, 20, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+}
+
+.prompt-tooltip-content {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.85em;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.92);
 }
 
 .add-btn {
@@ -160,4 +211,48 @@ h1 {
   text-align: center;
   color: #888;
   font-size: 0.9em;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem;
+}
+
+.modal {
+  width: 100%;
+  max-width: 340px;
+  background-color: #2a2a2a;
+  border: 1px solid #444;
+  border-radius: 8px;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.modal-title {
+  margin: 0 0 0.25rem;
+  font-size: 1em;
+  text-align: left;
+}
+
+.modal input,
+.modal textarea {
+  padding: 0.4rem;
+  background-color: #1a1a1a;
+  border: 1px solid #444;
+  border-radius: 4px;
+  color: white;
+  font-family: inherit;
+}
+
+.modal textarea {
+  min-height: 120px;
+  resize: vertical;
 }

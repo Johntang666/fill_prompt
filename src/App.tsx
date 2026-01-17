@@ -1,13 +1,90 @@
-import { useState, useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { Prompt } from './types';
 import './App.css';
+
+type TooltipState = {
+  isOpen: boolean;
+  text: string;
+  anchorRect: DOMRect | null;
+};
+
+function PromptPreviewTooltip({
+  tooltip,
+  onHoveredChange,
+  onRequestClose,
+}: {
+  tooltip: TooltipState;
+  onHoveredChange: (hovered: boolean) => void;
+  onRequestClose: () => void;
+}) {
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const [style, setStyle] = useState<React.CSSProperties>({});
+
+  useLayoutEffect(() => {
+    if (!tooltip.isOpen || !tooltip.anchorRect || !tooltipRef.current) return;
+
+    const margin = 8;
+    const offset = 10;
+    const rect = tooltip.anchorRect;
+    const tipRect = tooltipRef.current.getBoundingClientRect();
+
+    let left = rect.left;
+    let top = rect.bottom + offset;
+
+    if (left + tipRect.width + margin > window.innerWidth) {
+      left = Math.max(margin, window.innerWidth - tipRect.width - margin);
+    }
+
+    if (top + tipRect.height + margin > window.innerHeight) {
+      top = rect.top - tipRect.height - offset;
+    }
+
+    top = Math.max(margin, Math.min(top, window.innerHeight - tipRect.height - margin));
+
+    setStyle({ left, top });
+  }, [tooltip.isOpen, tooltip.text, tooltip.anchorRect]);
+
+  if (!tooltip.isOpen || !tooltip.anchorRect) return null;
+
+  return createPortal(
+    <div
+      ref={tooltipRef}
+      className="prompt-tooltip"
+      style={style}
+      role="tooltip"
+      onMouseEnter={() => onHoveredChange(true)}
+      onMouseLeave={() => {
+        onHoveredChange(false);
+        onRequestClose();
+      }}
+    >
+      <div className="prompt-tooltip-content">{tooltip.text}</div>
+    </div>,
+    document.body
+  );
+}
 
 function App() {
   const [prompts, setPrompts] = useState<Prompt[]>([]);
   const [newTitle, setNewTitle] = useState('');
   const [newContent, setNewContent] = useState('');
   const [isAdding, setIsAdding] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editContent, setEditContent] = useState('');
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [tooltip, setTooltip] = useState<TooltipState>({
+    isOpen: false,
+    text: '',
+    anchorRect: null,
+  });
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const isTooltipHoveredRef = useRef(false);
+  const draggingIdRef = useRef<string | null>(null);
+  const lastDragOverIdRef = useRef<string | null>(null);
+  const suppressNextClickRef = useRef(false);
+  const hideTooltipTimerRef = useRef<number | null>(null);
 
   // Load prompts from storage on mount
   useEffect(() => {
@@ -30,6 +107,21 @@ function App() {
     }
   }, [prompts]);
 
+  const setTooltipHovered = (hovered: boolean) => {
+    isTooltipHoveredRef.current = hovered;
+  };
+
+  const hideTooltip = () => {
+    setTooltip({ isOpen: false, text: '', anchorRect: null });
+  };
+
+  const scheduleHideTooltip = () => {
+    if (hideTooltipTimerRef.current) window.clearTimeout(hideTooltipTimerRef.current);
+    hideTooltipTimerRef.current = window.setTimeout(() => {
+      if (!isTooltipHoveredRef.current) hideTooltip();
+    }, 80);
+  };
+
   const handleAddPrompt = () => {
     if (!newTitle.trim() || !newContent.trim()) return;
 
@@ -47,10 +139,15 @@ function App() {
 
   const handleDeletePrompt = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    hideTooltip();
     setPrompts(prompts.filter((p) => p.id !== id));
   };
 
   const handleFillPrompt = async (prompt: Prompt) => {
+    if (suppressNextClickRef.current) {
+      suppressNextClickRef.current = false;
+      return;
+    }
     if (!chrome.tabs) {
       console.warn("Chrome tabs API not available");
       return;
@@ -134,6 +231,82 @@ function App() {
     e.target.value = '';
   };
 
+  const openEditPrompt = (prompt: Prompt, e: React.MouseEvent) => {
+    e.stopPropagation();
+    hideTooltip();
+    setEditingId(prompt.id);
+    setEditTitle(prompt.title);
+    setEditContent(prompt.content);
+  };
+
+  const saveEditPrompt = () => {
+    if (!editingId) return;
+    if (!editTitle.trim() || !editContent.trim()) return;
+
+    setPrompts((prev) =>
+      prev.map((p) =>
+        p.id === editingId ? { ...p, title: editTitle.trim(), content: editContent } : p
+      )
+    );
+    setEditingId(null);
+  };
+
+  const cancelEditPrompt = () => {
+    setEditingId(null);
+  };
+
+  const movePrompt = (items: Prompt[], activeId: string, overId: string) => {
+    const fromIndex = items.findIndex((p) => p.id === activeId);
+    const toIndex = items.findIndex((p) => p.id === overId);
+    if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) return items;
+
+    const next = items.slice();
+    const [moved] = next.splice(fromIndex, 1);
+    next.splice(toIndex, 0, moved);
+    return next;
+  };
+
+  const handleDragStart = (e: React.DragEvent, id: string) => {
+    hideTooltip();
+    suppressNextClickRef.current = true;
+    draggingIdRef.current = id;
+    lastDragOverIdRef.current = null;
+    setDraggingId(id);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', id);
+  };
+
+  const handleDragOver = (e: React.DragEvent, overId: string) => {
+    e.preventDefault();
+    const activeId = draggingIdRef.current;
+    if (!activeId || activeId === overId) return;
+    if (lastDragOverIdRef.current === overId) return;
+
+    lastDragOverIdRef.current = overId;
+    setPrompts((prev) => movePrompt(prev, activeId, overId));
+  };
+
+  const handleDragEnd = () => {
+    draggingIdRef.current = null;
+    lastDragOverIdRef.current = null;
+    setDraggingId(null);
+    window.setTimeout(() => {
+      suppressNextClickRef.current = false;
+    }, 150);
+  };
+
+  const handlePromptMouseEnter = (prompt: Prompt, e: React.MouseEvent<HTMLDivElement>) => {
+    if (draggingIdRef.current || editingId) return;
+    if (hideTooltipTimerRef.current) window.clearTimeout(hideTooltipTimerRef.current);
+
+    const anchorRect = e.currentTarget.getBoundingClientRect();
+    setTooltip({ isOpen: true, text: prompt.content, anchorRect });
+  };
+
+  const handlePromptMouseLeave = () => {
+    scheduleHideTooltip();
+  };
+
   // Parse Markdown content to Prompt array
   const parseMarkdownToPrompts = (markdown: string): Prompt[] => {
     const prompts: Prompt[] = [];
@@ -173,6 +346,11 @@ function App() {
 
   return (
     <div className="container">
+      <PromptPreviewTooltip
+        tooltip={tooltip}
+        onHoveredChange={setTooltipHovered}
+        onRequestClose={scheduleHideTooltip}
+      />
       <div className="header">
         <h1>Quick Prompts</h1>
         <div className="header-actions">
@@ -198,20 +376,67 @@ function App() {
         {prompts.map((prompt) => (
           <div
             key={prompt.id}
-            className="prompt-item"
+            className={`prompt-item${draggingId === prompt.id ? ' is-dragging' : ''}`}
             onClick={() => handleFillPrompt(prompt)}
-            title={prompt.content}
+            onMouseEnter={(e) => handlePromptMouseEnter(prompt, e)}
+            onMouseLeave={handlePromptMouseLeave}
+            onDragOver={(e) => handleDragOver(e, prompt.id)}
+            onDrop={(e) => {
+              e.preventDefault();
+              handleDragEnd();
+            }}
           >
-            <span className="prompt-title">{prompt.title}</span>
-            <button
-              className="delete-btn"
-              onClick={(e) => handleDeletePrompt(prompt.id, e)}
+            <span
+              className="drag-handle"
+              title="拖拽移动"
+              draggable
+              onDragStart={(e) => handleDragStart(e, prompt.id)}
+              onDragEnd={handleDragEnd}
+              onClick={(e) => e.stopPropagation()}
             >
-              ×
-            </button>
+              ⋮⋮
+            </span>
+            <span className="prompt-title">{prompt.title}</span>
+            <div className="prompt-actions">
+              <button className="edit-btn" onClick={(e) => openEditPrompt(prompt, e)} title="编辑">
+                ✎
+              </button>
+              <button
+                className="delete-btn"
+                onClick={(e) => handleDeletePrompt(prompt.id, e)}
+                title="删除"
+              >
+                ×
+              </button>
+            </div>
           </div>
         ))}
       </div>
+
+      {editingId && (
+        <div className="modal-overlay" onClick={cancelEditPrompt}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h2 className="modal-title">编辑提示词</h2>
+            <input
+              type="text"
+              placeholder="Title"
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+            />
+            <textarea
+              placeholder="Prompt content..."
+              value={editContent}
+              onChange={(e) => setEditContent(e.target.value)}
+            />
+            <div className="form-actions">
+              <button onClick={saveEditPrompt}>Save</button>
+              <button onClick={cancelEditPrompt} className="cancel-btn">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {isAdding ? (
         <div className="add-form">
