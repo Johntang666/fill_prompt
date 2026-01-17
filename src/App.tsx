@@ -1,69 +1,6 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { useEffect, useRef, useState } from 'react';
 import type { Prompt } from './types';
 import './App.css';
-
-type TooltipState = {
-  isOpen: boolean;
-  text: string;
-  anchorRect: DOMRect | null;
-};
-
-function PromptPreviewTooltip({
-  tooltip,
-  onHoveredChange,
-  onRequestClose,
-}: {
-  tooltip: TooltipState;
-  onHoveredChange: (hovered: boolean) => void;
-  onRequestClose: () => void;
-}) {
-  const tooltipRef = useRef<HTMLDivElement>(null);
-  const [style, setStyle] = useState<React.CSSProperties>({});
-
-  useLayoutEffect(() => {
-    if (!tooltip.isOpen || !tooltip.anchorRect || !tooltipRef.current) return;
-
-    const margin = 8;
-    const offset = 10;
-    const rect = tooltip.anchorRect;
-    const tipRect = tooltipRef.current.getBoundingClientRect();
-
-    let left = rect.left;
-    let top = rect.bottom + offset;
-
-    if (left + tipRect.width + margin > window.innerWidth) {
-      left = Math.max(margin, window.innerWidth - tipRect.width - margin);
-    }
-
-    if (top + tipRect.height + margin > window.innerHeight) {
-      top = rect.top - tipRect.height - offset;
-    }
-
-    top = Math.max(margin, Math.min(top, window.innerHeight - tipRect.height - margin));
-
-    setStyle({ left, top });
-  }, [tooltip.isOpen, tooltip.text, tooltip.anchorRect]);
-
-  if (!tooltip.isOpen || !tooltip.anchorRect) return null;
-
-  return createPortal(
-    <div
-      ref={tooltipRef}
-      className="prompt-tooltip"
-      style={style}
-      role="tooltip"
-      onMouseEnter={() => onHoveredChange(true)}
-      onMouseLeave={() => {
-        onHoveredChange(false);
-        onRequestClose();
-      }}
-    >
-      <div className="prompt-tooltip-content">{tooltip.text}</div>
-    </div>,
-    document.body
-  );
-}
 
 function App() {
   const [prompts, setPrompts] = useState<Prompt[]>([]);
@@ -73,18 +10,12 @@ function App() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [editContent, setEditContent] = useState('');
+  const [detailPrompt, setDetailPrompt] = useState<Prompt | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [tooltip, setTooltip] = useState<TooltipState>({
-    isOpen: false,
-    text: '',
-    anchorRect: null,
-  });
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const isTooltipHoveredRef = useRef(false);
   const draggingIdRef = useRef<string | null>(null);
   const lastDragOverIdRef = useRef<string | null>(null);
   const suppressNextClickRef = useRef(false);
-  const hideTooltipTimerRef = useRef<number | null>(null);
 
   // Load prompts from storage on mount
   useEffect(() => {
@@ -107,21 +38,6 @@ function App() {
     }
   }, [prompts]);
 
-  const setTooltipHovered = (hovered: boolean) => {
-    isTooltipHoveredRef.current = hovered;
-  };
-
-  const hideTooltip = () => {
-    setTooltip({ isOpen: false, text: '', anchorRect: null });
-  };
-
-  const scheduleHideTooltip = () => {
-    if (hideTooltipTimerRef.current) window.clearTimeout(hideTooltipTimerRef.current);
-    hideTooltipTimerRef.current = window.setTimeout(() => {
-      if (!isTooltipHoveredRef.current) hideTooltip();
-    }, 80);
-  };
-
   const handleAddPrompt = () => {
     if (!newTitle.trim() || !newContent.trim()) return;
 
@@ -139,7 +55,6 @@ function App() {
 
   const handleDeletePrompt = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    hideTooltip();
     setPrompts(prompts.filter((p) => p.id !== id));
   };
 
@@ -231,9 +146,19 @@ function App() {
     e.target.value = '';
   };
 
+  const openDetailPrompt = (prompt: Prompt, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingId(null);
+    setDetailPrompt(prompt);
+  };
+
+  const closeDetailPrompt = () => {
+    setDetailPrompt(null);
+  };
+
   const openEditPrompt = (prompt: Prompt, e: React.MouseEvent) => {
     e.stopPropagation();
-    hideTooltip();
+    setDetailPrompt(null);
     setEditingId(prompt.id);
     setEditTitle(prompt.title);
     setEditContent(prompt.content);
@@ -267,7 +192,7 @@ function App() {
   };
 
   const handleDragStart = (e: React.DragEvent, id: string) => {
-    hideTooltip();
+    closeDetailPrompt();
     suppressNextClickRef.current = true;
     draggingIdRef.current = id;
     lastDragOverIdRef.current = null;
@@ -293,18 +218,6 @@ function App() {
     window.setTimeout(() => {
       suppressNextClickRef.current = false;
     }, 150);
-  };
-
-  const handlePromptMouseEnter = (prompt: Prompt, e: React.MouseEvent<HTMLDivElement>) => {
-    if (draggingIdRef.current || editingId) return;
-    if (hideTooltipTimerRef.current) window.clearTimeout(hideTooltipTimerRef.current);
-
-    const anchorRect = e.currentTarget.getBoundingClientRect();
-    setTooltip({ isOpen: true, text: prompt.content, anchorRect });
-  };
-
-  const handlePromptMouseLeave = () => {
-    scheduleHideTooltip();
   };
 
   // Parse Markdown content to Prompt array
@@ -346,11 +259,6 @@ function App() {
 
   return (
     <div className="container">
-      <PromptPreviewTooltip
-        tooltip={tooltip}
-        onHoveredChange={setTooltipHovered}
-        onRequestClose={scheduleHideTooltip}
-      />
       <div className="header">
         <h1>Quick Prompts</h1>
         <div className="header-actions">
@@ -378,8 +286,6 @@ function App() {
             key={prompt.id}
             className={`prompt-item${draggingId === prompt.id ? ' is-dragging' : ''}`}
             onClick={() => handleFillPrompt(prompt)}
-            onMouseEnter={(e) => handlePromptMouseEnter(prompt, e)}
-            onMouseLeave={handlePromptMouseLeave}
             onDragOver={(e) => handleDragOver(e, prompt.id)}
             onDrop={(e) => {
               e.preventDefault();
@@ -398,6 +304,13 @@ function App() {
             </span>
             <span className="prompt-title">{prompt.title}</span>
             <div className="prompt-actions">
+              <button
+                className="details-btn"
+                onClick={(e) => openDetailPrompt(prompt, e)}
+                title="详情"
+              >
+                i
+              </button>
               <button className="edit-btn" onClick={(e) => openEditPrompt(prompt, e)} title="编辑">
                 ✎
               </button>
@@ -412,6 +325,19 @@ function App() {
           </div>
         ))}
       </div>
+
+      {detailPrompt && (
+        <div className="modal-overlay" onClick={closeDetailPrompt}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h2 className="modal-title">提示词详情</h2>
+            <div className="detail-title">{detailPrompt.title}</div>
+            <div className="detail-content">{detailPrompt.content}</div>
+            <div className="form-actions">
+              <button onClick={closeDetailPrompt}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {editingId && (
         <div className="modal-overlay" onClick={cancelEditPrompt}>

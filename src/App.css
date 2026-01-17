@@ -106,6 +106,7 @@ h1 {
   gap: 0.25rem;
 }
 
+.details-btn,
 .edit-btn,
 .delete-btn {
   background: none;
@@ -116,33 +117,16 @@ h1 {
   padding: 0 4px;
 }
 
+.details-btn:hover {
+  color: #9bd3ff;
+}
+
 .edit-btn:hover {
   color: #b6b6ff;
 }
 
 .delete-btn:hover {
   color: #ff4444;
-}
-
-.prompt-tooltip {
-  position: fixed;
-  z-index: 9999;
-  max-width: 320px;
-  max-height: 240px;
-  overflow: auto;
-  padding: 0.5rem 0.6rem;
-  border-radius: 6px;
-  background: rgba(20, 20, 20, 0.98);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
-}
-
-.prompt-tooltip-content {
-  white-space: pre-wrap;
-  word-break: break-word;
-  font-size: 0.85em;
-  line-height: 1.35;
-  color: rgba(255, 255, 255, 0.92);
 }
 
 .add-btn {
@@ -255,4 +239,23 @@ h1 {
 .modal textarea {
   min-height: 120px;
   resize: vertical;
+}
+
+.detail-title {
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.detail-content {
+  max-height: 220px;
+  overflow: auto;
+  padding: 0.5rem 0.6rem;
+  border-radius: 6px;
+  background: rgba(20, 20, 20, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.85em;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.92);
 }
