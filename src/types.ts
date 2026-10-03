@@ -3,3 +3,7 @@ export interface Prompt {
   title: string;
   content: string;
 }
+
+export type FillPromptResponse =
+  | { status: 'success' }
+  | { status: 'error'; message: string };
